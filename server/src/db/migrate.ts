@@ -64,6 +64,42 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    id: "0003_expenses",
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE expenses (
+          id TEXT PRIMARY KEY,
+          group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+          description TEXT NOT NULL,
+          amount INTEGER NOT NULL CHECK (amount > 0),
+          currency TEXT NOT NULL DEFAULT 'INR',
+          paid_by TEXT NOT NULL REFERENCES users(id),
+          split_type TEXT NOT NULL CHECK (split_type IN ('equal', 'exact', 'percentage', 'shares')),
+          expense_date TEXT NOT NULL,
+          category TEXT,
+          notes TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE expense_participants (
+          id TEXT PRIMARY KEY,
+          expense_id TEXT NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL REFERENCES users(id),
+          share_amount INTEGER NOT NULL CHECK (share_amount >= 0),
+          percentage REAL,
+          shares INTEGER,
+          UNIQUE (expense_id, user_id)
+        );
+
+        CREATE INDEX idx_expenses_group_id ON expenses(group_id);
+        CREATE INDEX idx_expenses_paid_by ON expenses(paid_by);
+        CREATE INDEX idx_expense_participants_expense_id ON expense_participants(expense_id);
+        CREATE INDEX idx_expense_participants_user_id ON expense_participants(user_id);
+      `);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

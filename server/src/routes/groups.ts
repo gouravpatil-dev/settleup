@@ -4,6 +4,7 @@ import { getDb } from "../db/connection.js";
 import { validate } from "../middleware/validate.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
 import { requireAuth } from "../middleware/requireAuth.js";
+import { expensesRouter } from "./expenses.js";
 import {
   createGroupSchema,
   renameGroupSchema,
@@ -16,6 +17,8 @@ export const groupsRouter = Router();
 
 // Every route below requires a valid session.
 groupsRouter.use(requireAuth);
+
+groupsRouter.use("/:groupId/expenses", expensesRouter);
 
 groupsRouter.post(
   "/",

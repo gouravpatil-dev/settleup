@@ -50,6 +50,53 @@ export interface GroupMemberWithUser {
   email: string;
 }
 
+export type SplitType = "equal" | "exact" | "percentage" | "shares";
+
+export interface ExpenseRow {
+  id: string;
+  group_id: string;
+  description: string;
+  amount: number;
+  currency: string;
+  paid_by: string;
+  split_type: SplitType;
+  expense_date: string;
+  category: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExpenseParticipantRow {
+  id: string;
+  expense_id: string;
+  user_id: string;
+  share_amount: number;
+  percentage: number | null;
+  shares: number | null;
+}
+
+export interface PublicExpense {
+  id: string;
+  groupId: string;
+  description: string;
+  amount: number;
+  currency: string;
+  paidBy: string;
+  splitType: SplitType;
+  date: string;
+  category: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  participants: Array<{
+    userId: string;
+    amount: number;
+    percentage: number | null;
+    shares: number | null;
+  }>;
+}
+
 /** Attached to req.user by requireAuth. */
 export interface AuthenticatedUser {
   id: string;
