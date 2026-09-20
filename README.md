@@ -119,10 +119,3 @@ default; override with `VITE_API_URL` if needed.
 - No email verification or password reset
 - `npm audit` flags some vulnerabilities in transitive dev
   dependencies — not yet triaged; revisit at Phase 15
-
-## Next phase
-
-**Phase 4 — Balance Engine**: a pure `calculateBalances(...)` function
-(independent of Express/React) that takes members, expenses, splits,
-and settlements, and produces each member's net balance. Extensive
-tests, especially around rounding with many members/expenses.
