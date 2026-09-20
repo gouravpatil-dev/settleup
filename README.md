@@ -5,9 +5,8 @@ piece is the settlement optimizer, which turns a group's raw
 expense obligations into a reduced set of final payments — not yet
 built (that's Phase 4–5).
 
-**Status: Phase 2 (Authentication and Groups) complete.** Expenses,
-the balance engine, and the settlement optimizer are not implemented
-yet.
+**Status: Phase 3 (Expense Engine) complete.** The balance engine and
+settlement optimizer are not implemented yet.
 
 ## Stack
 
@@ -51,6 +50,37 @@ npm run build       # production build → client/dist
 The frontend calls the backend at `http://localhost:4000/api` by
 default; override with `VITE_API_URL` if needed.
 
+## What's built (Phase 3)
+
+- **Split calculator** (`services/splitCalculator.ts`): pure functions,
+  no DB/Express dependency. Supports equal, exact, percentage, and
+  share-based splits. All four use a "largest remainder" apportionment
+  method so a split always sums to exactly the total amount — no lost
+  or invented paise from floating-point division. Percentages are
+  converted to basis points internally to avoid float rounding drift.
+- **Expenses**: `expenses` + `expense_participants` tables (amounts as
+  integer minor units, per the Phase 1 schema decision). Create/list/
+  get endpoints nested under a group
+  (`/api/groups/:groupId/expenses`), all behind `requireAuth` +
+  membership checks.
+- **Validation**: exact splits must sum to the total; percentages must
+  sum to 100 (±0.01 to tolerate things like three-way 33.33/33.33/
+  33.34 splits); shares must be positive integers; the payer and every
+  participant must belong to the group; no duplicate participants.
+- **Assumption made**: the API accepts `amount` as an integer in minor
+  currency units (e.g. paise, cents) directly from the client, not as
+  a decimal rupee/dollar figure — this keeps the float-free boundary
+  consistent end-to-end rather than converting at the API edge. Worth
+  revisiting once the frontend expense form (Phase 6) is built, if a
+  decimal input feels more natural there.
+- 39 new tests (62 total): 23 pure split-calculator tests (all four
+  split types, remainder distribution, rejection of bad input) plus
+  16 integration tests (one creation test per split type, rejection
+  of bad exact/percentage/shares input, non-member participant/payer
+  rejected, non-positive amount rejected, unauthenticated/non-member
+  access denied, list and get-by-id, cross-group expense id correctly
+  404s).
+
 ## What's built (Phase 2)
 
 - **Auth**: register/login/logout backed by session cookies (httpOnly,
@@ -65,50 +95,34 @@ default; override with `VITE_API_URL` if needed.
 - **Isolation**: a non-member requesting a group they don't belong to
   gets a 404 (identical to "group doesn't exist"), never a 403 that
   would confirm the group's existence.
-- 23 backend tests total: the Phase 1 suite plus registration,
-  duplicate-email rejection, invalid-input rejection, login
-  (success/wrong password/unknown email), the protected `/me`
-  endpoint (valid session / no cookie / forged cookie), logout
-  invalidating the session, group creation + ownership, non-member
-  access denial, member addition and visibility, non-owner rename/
-  delete/add/remove rejection (403), group-list scoping, and the
-  last-owner removal guard.
 
 ## What's built (Phase 1)
 
 - Express app with centralized error handling (`AppError` hierarchy),
   a generic Zod-based request validator, and a health endpoint
   (`GET /api/health`)
-- SQLite connection + an idempotent migration runner, with the
-  `users`, `groups`, and `group_members` tables. Amounts will be
-  stored as integer minor units (paise), not floats, once expenses
-  land in Phase 3 — this is a schema-level decision made now to avoid
-  a retrofit later
+- SQLite connection + an idempotent migration runner
 - React app shell: router, nav, a `Dashboard` page that calls the real
-  health endpoint (proving the loading/error state pattern end-to-end
-  rather than against a mock), a `Groups` placeholder, and a 404 page
-- `useAsync` hook and `LoadingState`/`ErrorState` components so every
-  future page handles loading/error consistently
+  health endpoint, a `Groups` placeholder, and a 404 page
+- `useAsync` hook and `LoadingState`/`ErrorState` components
 
 ## Known limitations / not yet done
 
-- No expenses, balances, or settlement optimizer yet (Phases 3–7)
-- Frontend has no login/register/groups UI yet — the actual UI for
-  auth and groups is scheduled for Phase 6 in the build plan; the
-  `Dashboard`/`Groups` pages from Phase 1 are unchanged placeholders
-- No CSRF protection yet (noted for Phase 15, security pass) — session
-  cookies use `sameSite: lax`, which mitigates but doesn't eliminate
-  CSRF risk on state-changing requests
-- No rate limiting on login/register (brute-force risk) — also
-  scheduled for the security pass
-- No email verification or password reset flow
+- No balance engine or settlement optimizer yet (Phases 4–5) — nothing
+  yet converts expenses into "who owes whom"
+- No expense update/delete — Phase 3 scope was creation, per the
+  build plan; edit/delete would follow the same
+  authorization/ownership pattern as groups if added
+- Frontend has no expense UI yet — scheduled for Phase 6
+- No CSRF protection, no rate limiting on login/register — deferred to
+  Phase 15 (security pass)
+- No email verification or password reset
 - `npm audit` flags some vulnerabilities in transitive dev
-  dependencies (mostly from `better-sqlite3`'s prebuild toolchain and
-  jsdom's dependency tree) — not yet triaged; revisit before
-  production deployment (Phase 15, security pass)
+  dependencies — not yet triaged; revisit at Phase 15
 
 ## Next phase
 
-**Phase 3 — Expense Engine**: expense creation with equal/exact/
-percentage/share splits, validation for each split type, and
-extensive tests per split type and edge case.
+**Phase 4 — Balance Engine**: a pure `calculateBalances(...)` function
+(independent of Express/React) that takes members, expenses, splits,
+and settlements, and produces each member's net balance. Extensive
+tests, especially around rounding with many members/expenses.
