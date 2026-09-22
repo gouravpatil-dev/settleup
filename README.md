@@ -5,8 +5,8 @@ piece is the settlement optimizer, which turns a group's raw
 expense obligations into a reduced set of final payments — not yet
 built (that's Phase 4–5).
 
-**Status: Phase 3 (Expense Engine) complete.** The balance engine and
-settlement optimizer are not implemented yet.
+**Status: Phase 4 (Balance Engine) complete.** The settlement
+optimizer is not implemented yet.
 
 ## Stack
 
@@ -50,72 +50,77 @@ npm run build       # production build → client/dist
 The frontend calls the backend at `http://localhost:4000/api` by
 default; override with `VITE_API_URL` if needed.
 
+## What's built (Phase 4)
+
+- **Balance engine** (`algorithm/balanceCalculator.ts`): a pure
+  `calculateBalances()` function, no DB/Express dependency. Takes
+  member ids, expenses (payer + resolved participant shares), and an
+  optional settlements list; returns each member's net balance
+  (positive = owed money, negative = owes money). Every member is
+  seeded at zero so someone with no expenses still shows as settled,
+  and any id that turns up in expenses/settlements but isn't in
+  memberIds is still included — balances are never silently dropped.
+- Settlements are already a first-class input to the engine even
+  though there's no settlements table yet — that lands in Phase 7
+  ("mark as paid"); wiring real ones in later is additive to
+  `BalanceService`, not a rewrite of the engine.
+- `GET /api/groups/:groupId/balances` — membership-gated, returns
+  each member's balance plus name/email for display.
+- Small refactor: the repeated "is this user a member of this group"
+  check (previously duplicated in `GroupService` and `ExpenseService`)
+  is now a shared `requireGroupMembership()` helper, used by all three
+  services including the new `BalanceService`.
+- 17 new tests (79 total): 12 unit tests on the balance engine (single
+  expense, multiple expenses, multiple payers — the worked example
+  from the spec, unequal splits, a member with no expenses at all,
+  a payer who's also a participant netting to zero, full and partial
+  settlements, rounding-remainder splits still summing to zero, 25
+  members × 60 expenses with no drift, and a defensive case for a
+  balance id outside the known member list) plus 5 integration tests.
+
 ## What's built (Phase 3)
 
 - **Split calculator** (`services/splitCalculator.ts`): pure functions,
   no DB/Express dependency. Supports equal, exact, percentage, and
-  share-based splits. All four use a "largest remainder" apportionment
-  method so a split always sums to exactly the total amount — no lost
-  or invented paise from floating-point division. Percentages are
-  converted to basis points internally to avoid float rounding drift.
-- **Expenses**: `expenses` + `expense_participants` tables (amounts as
-  integer minor units, per the Phase 1 schema decision). Create/list/
-  get endpoints nested under a group
-  (`/api/groups/:groupId/expenses`), all behind `requireAuth` +
-  membership checks.
-- **Validation**: exact splits must sum to the total; percentages must
-  sum to 100 (±0.01 to tolerate things like three-way 33.33/33.33/
-  33.34 splits); shares must be positive integers; the payer and every
-  participant must belong to the group; no duplicate participants.
+  share-based splits, using a "largest remainder" apportionment method
+  so a split always sums to exactly the total amount.
+- **Expenses**: `expenses` + `expense_participants` tables. Create/
+  list/get endpoints nested under a group.
 - **Assumption made**: the API accepts `amount` as an integer in minor
-  currency units (e.g. paise, cents) directly from the client, not as
-  a decimal rupee/dollar figure — this keeps the float-free boundary
-  consistent end-to-end rather than converting at the API edge. Worth
-  revisiting once the frontend expense form (Phase 6) is built, if a
-  decimal input feels more natural there.
-- 39 new tests (62 total): 23 pure split-calculator tests (all four
-  split types, remainder distribution, rejection of bad input) plus
-  16 integration tests (one creation test per split type, rejection
-  of bad exact/percentage/shares input, non-member participant/payer
-  rejected, non-positive amount rejected, unauthenticated/non-member
-  access denied, list and get-by-id, cross-group expense id correctly
-  404s).
+  currency units directly from the client, not a decimal figure.
 
 ## What's built (Phase 2)
 
-- **Auth**: register/login/logout backed by session cookies (httpOnly,
-  `sameSite: lax`, `secure` in production), 7-day sessions stored in a
-  `sessions` table, bcrypt password hashing (12 rounds). Login and
-  registration failures never reveal whether an email is registered.
-- **Groups**: create, rename, delete, list-for-user, get-details — all
-  behind `requireAuth`.
-- **Membership**: add/remove members by email, list members,
-  owner-only authorization for rename/delete/add/remove, and a guard
-  against removing a group's last owner.
-- **Isolation**: a non-member requesting a group they don't belong to
-  gets a 404 (identical to "group doesn't exist"), never a 403 that
-  would confirm the group's existence.
+- **Auth**: register/login/logout backed by session cookies, bcrypt
+  password hashing, 7-day sessions. Login/registration never reveal
+  whether an email is registered.
+- **Groups & membership**: full CRUD, owner-only authorization,
+  last-owner-removal guard, and non-member access returns 404.
 
 ## What's built (Phase 1)
 
-- Express app with centralized error handling (`AppError` hierarchy),
-  a generic Zod-based request validator, and a health endpoint
-  (`GET /api/health`)
-- SQLite connection + an idempotent migration runner
-- React app shell: router, nav, a `Dashboard` page that calls the real
-  health endpoint, a `Groups` placeholder, and a 404 page
-- `useAsync` hook and `LoadingState`/`ErrorState` components
+- Express app with centralized error handling, Zod validation,
+  SQLite + idempotent migrations, health endpoint.
+- React app shell: router, nav, `Dashboard`/`Groups`/404 pages,
+  `useAsync` hook, loading/error components.
 
 ## Known limitations / not yet done
 
-- No balance engine or settlement optimizer yet (Phases 4–5) — nothing
-  yet converts expenses into "who owes whom"
-- No expense update/delete — Phase 3 scope was creation, per the
-  build plan; edit/delete would follow the same
-  authorization/ownership pattern as groups if added
-- Frontend has no expense UI yet — scheduled for Phase 6
-- No CSRF protection, no rate limiting on login/register — deferred to
-  Phase 15 (security pass)
-- No email verification or password reset
+- No settlement optimizer yet (Phase 5) — balances exist, but nothing
+  yet converts them into a minimal set of payments
+- No settlement persistence/history — the engine supports it, the API
+  doesn't expose it yet (Phase 7)
+- No expense update/delete
+- Frontend has no expense/balance UI yet — scheduled for Phase 6
+- No CSRF protection, no rate limiting, no email verification/password
+  reset — all deferred to Phase 15
 - `npm audit` flags some vulnerabilities in transitive dev
-  dependencies — not yet triaged; revisit at Phase 15
+  dependencies — not yet triaged
+
+## Next phase
+
+**Phase 5 — Settlement Optimizer V1**: a pure algorithm module that
+takes net balances and produces a reduced set of settlement
+transactions (greedy creditor/debtor matching), with invariant-based
+tests (money conserved, all balances resolve to zero, no self-
+payments, no non-positive transfers, deterministic output).

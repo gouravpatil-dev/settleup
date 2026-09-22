@@ -3,6 +3,7 @@ import { GroupRepository } from "../repositories/GroupRepository.js";
 import { GroupMemberRepository } from "../repositories/GroupMemberRepository.js";
 import { UserRepository } from "../repositories/UserRepository.js";
 import { ForbiddenError, NotFoundError, ConflictError } from "../utils/AppError.js";
+import { requireGroupMembership } from "../utils/requireMembership.js";
 import type { GroupMemberWithUser, GroupRow } from "../types/domain.js";
 
 export class GroupService {
@@ -87,10 +88,8 @@ export class GroupService {
   }
 
   private requireOwner(groupId: string, userId: string): void {
-    const membership = this.members.findMembership(groupId, userId);
-    if (!membership) {
-      throw new NotFoundError("Group");
-    }
+    requireGroupMembership(this.members, groupId, userId);
+    const membership = this.members.findMembership(groupId, userId)!;
     if (membership.role !== "owner") {
       throw new ForbiddenError("Only the group owner can do this");
     }

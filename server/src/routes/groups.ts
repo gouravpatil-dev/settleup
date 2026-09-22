@@ -5,6 +5,7 @@ import { validate } from "../middleware/validate.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { expensesRouter } from "./expenses.js";
+import { balancesRouter } from "./balances.js";
 import {
   createGroupSchema,
   renameGroupSchema,
@@ -19,6 +20,7 @@ export const groupsRouter = Router();
 groupsRouter.use(requireAuth);
 
 groupsRouter.use("/:groupId/expenses", expensesRouter);
+groupsRouter.use("/:groupId/balances", balancesRouter);
 
 groupsRouter.post(
   "/",
