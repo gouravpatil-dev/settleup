@@ -110,7 +110,7 @@ default; override with `VITE_API_URL` if needed.
   yet converts them into a minimal set of payments
 - No settlement persistence/history — the engine supports it, the API
   doesn't expose it yet (Phase 7)
-- No expense update/delete
+- No expense updation or deletion
 - Frontend has no expense/balance UI yet — scheduled for Phase 6
 - No CSRF protection, no rate limiting, no email verification/password
   reset — all deferred to Phase 15
