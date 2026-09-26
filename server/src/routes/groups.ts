@@ -6,6 +6,7 @@ import { asyncHandler } from "../middleware/errorHandler.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { expensesRouter } from "./expenses.js";
 import { balancesRouter } from "./balances.js";
+import { settlementsRouter } from "./settlements.js";
 import {
   createGroupSchema,
   renameGroupSchema,
@@ -21,6 +22,7 @@ groupsRouter.use(requireAuth);
 
 groupsRouter.use("/:groupId/expenses", expensesRouter);
 groupsRouter.use("/:groupId/balances", balancesRouter);
+groupsRouter.use("/:groupId/settlements", settlementsRouter);
 
 groupsRouter.post(
   "/",

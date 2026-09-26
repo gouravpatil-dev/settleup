@@ -2,6 +2,7 @@ import type Database from "better-sqlite3";
 import { ExpenseRepository } from "../repositories/ExpenseRepository.js";
 import { GroupMemberRepository } from "../repositories/GroupMemberRepository.js";
 import { NotFoundError, ValidationError } from "../utils/AppError.js";
+import { requireGroupMembership } from "../utils/requireMembership.js";
 import { calculateSplit, type SplitParticipantsInput } from "./splitCalculator.js";
 import type { PublicExpense } from "../types/domain.js";
 
@@ -25,14 +26,6 @@ export class ExpenseService {
     this.members = new GroupMemberRepository(db);
   }
 
-  /** Throws NotFoundError if the requester isn't a member — same shape as group access checks elsewhere. */
-  private requireMembership(groupId: string, userId: string): void {
-    const membership = this.members.findMembership(groupId, userId);
-    if (!membership) {
-      throw new NotFoundError("Group");
-    }
-  }
-
   private assertAllMembersOfGroup(groupId: string, userIds: string[]): void {
     for (const userId of userIds) {
       if (!this.members.findMembership(groupId, userId)) {
@@ -42,7 +35,7 @@ export class ExpenseService {
   }
 
   createExpense(groupId: string, requesterId: string, input: CreateExpenseInput): PublicExpense {
-    this.requireMembership(groupId, requesterId);
+    requireGroupMembership(this.members, groupId, requesterId);
 
     const participantIds = input.split.participants.map((p) => p.userId);
     this.assertAllMembersOfGroup(groupId, [input.paidBy, ...participantIds]);
@@ -64,12 +57,12 @@ export class ExpenseService {
   }
 
   listExpensesForGroup(groupId: string, requesterId: string): PublicExpense[] {
-    this.requireMembership(groupId, requesterId);
+    requireGroupMembership(this.members, groupId, requesterId);
     return this.expenses.listForGroup(groupId);
   }
 
   getExpense(groupId: string, expenseId: string, requesterId: string): PublicExpense {
-    this.requireMembership(groupId, requesterId);
+    requireGroupMembership(this.members, groupId, requesterId);
     const expense = this.expenses.findById(expenseId);
     if (!expense || expense.groupId !== groupId) {
       throw new NotFoundError("Expense");
