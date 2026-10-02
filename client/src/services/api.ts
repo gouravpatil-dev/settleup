@@ -10,6 +10,11 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Thin fetch wrapper: prefixes the API base URL, parses JSON, and
+ * turns non-2xx responses into a typed ApiError so components can
+ * distinguish "request failed" from "network unreachable".
+ */
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE_URL}${path}`, {
     headers: { "Content-Type": "application/json", ...init?.headers },

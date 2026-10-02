@@ -5,9 +5,10 @@ piece is the settlement optimizer, which turns a group's raw
 expense obligations into a reduced set of final payments — not yet
 built (that's Phase 4–5).
 
-**Status: Phase 5 (Settlement Optimizer V1) complete.** All core
-algorithm/backend phases (1–5) are done. The frontend still only has
-the Phase 1 app shell — no real UI for any of this yet (Phase 6).
+**Status: Phase 6 (Expense and Balance UI) complete.** The app now has
+a real, working frontend on top of the Phases 1–5 backend. This is
+also the current scope boundary for the project — see the note at
+the end of this file.
 
 ## Stack
 
@@ -50,6 +51,61 @@ npm run build       # production build → client/dist
 
 The frontend calls the backend at `http://localhost:4000/api` by
 default; override with `VITE_API_URL` if needed.
+
+## What's built (Phase 6)
+
+- **Auth screens** (not in the original phase list, added as necessary
+  prerequisite infrastructure — nothing else in the app works without
+  a way to log in): `Login`/`Register` pages, an `AuthProvider`
+  context resolving the session on load, and a `RequireAuth` route
+  guard redirecting to `/login`.
+- **Pages**: `Dashboard` (your groups at a glance), `Groups` (list +
+  create), `GroupDetails` (total spending, settlement status, recent
+  expenses, member list, add/remove members, delete group — all
+  owner-gated in the UI to match the backend's authorization),
+  `AddExpense`, `ExpenseDetails`, `Balances`.
+- **Add-expense flow**: payer, amount, description, participant
+  checkboxes, split-type selector, and a per-type config section with
+  **live validation feedback** so the split's validity is never a
+  guessing game — an exact split shows "Assigned ₹X of ₹Y" as you
+  type, a percentage split shows a running total against 100%, and
+  the submit button is disabled until the split is valid. The spec's
+  8-step wizard is collapsed into one scrollable form with a review
+  section at the bottom, rather than a literal multi-screen wizard —
+  simpler to build and use for a form this size; noted here in case
+  that trade-off is worth revisiting.
+- **Resolved the Phase 3 "minor units" assumption**: the UI now
+  accepts amounts in rupees (decimal) and converts to paise
+  (`utils/currency.ts`) right at the API boundary — the one place
+  that conversion happens, so the rest of the app stays float-free
+  end to end as designed.
+- **Bug found and fixed**: while wiring the UI up to real API
+  responses, `GET`/`POST /api/groups*` turned out to return raw
+  snake_case DB columns (`created_by`, `created_at`) instead of the
+  camelCase shape every other endpoint uses — the Phase 2 tests never
+  checked those specific fields, so it slipped through. Added
+  `PublicGroup`/`toPublicGroup` (matching the pattern already used for
+  users and expenses) and a regression test asserting the camelCase
+  shape explicitly.
+- 2 frontend tests updated for the new auth-gated routing (redirect to
+  `/login` when logged out, `Dashboard` renders when logged in). 1
+  server regression test added. 97 total tests across both packages,
+  all passing.
+
+## A note on project scope
+
+This project was originally planned as a 22-phase build (see the full
+phase list this README's structure follows). After Phase 5, we
+deliberately stopped following that plan phase-by-phase: for a
+portfolio project, a finished, well-tested 6-phase app demonstrates
+more than a partially-built 22-phase one, and the time saved is
+better spent on a second/third project and on shipping this one
+(deployment, a polished README with the algorithm explained clearly,
+maybe a live demo link) rather than adding more feature surface.
+Settlement history/"mark as paid" (Phase 7), analytics (Phase 10),
+and the exact-solver optimizer (Phase 13) are the most natural next
+additions if this project gets picked back up, but they are not
+planned as an immediate next phase the way Phases 1–6 were.
 
 ## What's built (Phase 5)
 
@@ -105,23 +161,17 @@ default; override with `VITE_API_URL` if needed.
 
 ## Known limitations / not yet done
 
-- No frontend UI for any of groups/expenses/balances/settlements yet
-  — everything above is backend/API only; Phase 6 builds the actual
-  screens
 - No settlement persistence/history (no "mark as paid") — the plan is
-  computed on the fly each time, nothing is recorded yet (Phase 7)
-- No expense update/delete
+  computed on the fly each time via `GET /settlements/plan`, nothing
+  is recorded. There's no dedicated settlement-plan UI screen yet
+  either — `Balances` shows net balances, not the optimized
+  transaction list (that pairing was originally Phase 7)
+- No expense update/delete, either in the API or the UI
 - No CSRF protection, no rate limiting, no email verification/password
-  reset — all deferred to Phase 15
+  reset
 - The optimizer is greedy only — no exact/minimal-transaction-count
-  solver yet (Phase 13)
+  solver
+- No analytics, no CSV/PDF export, no receipt attachments
+- No deployment yet — see the scope note above for what's next
 - `npm audit` flags some vulnerabilities in transitive dev
   dependencies — not yet triaged
-
-## Next phase
-
-**Phase 6 — Expense and Balance UI**: the actual application
-experience — Dashboard, Groups, Group Details, Add Expense, Expense
-Details, Balances pages, with a multi-step add-expense flow and
-obvious split-validation feedback. This is the first phase that
-gives the backend built in Phases 2–5 a real interface.

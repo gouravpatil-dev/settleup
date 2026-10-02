@@ -25,6 +25,31 @@ async function registerUser(email: string, name: string) {
 }
 
 describe("Group creation, ownership, and access control", () => {
+  it("returns groups in camelCase (regression: was leaking raw snake_case DB columns)", async () => {
+    const owner = await registerUser("camelcase-owner@example.com", "Owner");
+
+    const createRes = await request(app)
+      .post("/api/groups")
+      .set("Cookie", owner.cookie)
+      .send({ name: "Camel Case Group" });
+
+    expect(createRes.body.group).toMatchObject({
+      id: expect.any(String),
+      name: "Camel Case Group",
+      createdBy: owner.user.id,
+      createdAt: expect.any(String),
+      updatedAt: expect.any(String),
+    });
+    expect(createRes.body.group.created_by).toBeUndefined();
+    expect(createRes.body.group.created_at).toBeUndefined();
+
+    const getRes = await request(app)
+      .get(`/api/groups/${createRes.body.group.id}`)
+      .set("Cookie", owner.cookie);
+    expect(getRes.body.group.createdBy).toBe(owner.user.id);
+    expect(getRes.body.group.created_by).toBeUndefined();
+  });
+
   it("lets an authenticated user create a group and become its owner", async () => {
     const owner = await registerUser("owner1@example.com", "Owner One");
 

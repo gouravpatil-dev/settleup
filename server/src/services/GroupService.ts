@@ -4,7 +4,7 @@ import { GroupMemberRepository } from "../repositories/GroupMemberRepository.js"
 import { UserRepository } from "../repositories/UserRepository.js";
 import { ForbiddenError, NotFoundError, ConflictError } from "../utils/AppError.js";
 import { requireGroupMembership } from "../utils/requireMembership.js";
-import type { GroupMemberWithUser, GroupRow } from "../types/domain.js";
+import type { GroupMemberWithUser, PublicGroup } from "../types/domain.js";
 
 export class GroupService {
   private readonly groups: GroupRepository;
@@ -17,19 +17,19 @@ export class GroupService {
     this.users = new UserRepository(db);
   }
 
-  createGroup(params: { name: string; ownerId: string }): GroupRow {
+  createGroup(params: { name: string; ownerId: string }): PublicGroup {
     const group = this.groups.create({ name: params.name, createdBy: params.ownerId });
     this.members.add({ groupId: group.id, userId: params.ownerId, role: "owner" });
     return group;
   }
 
-  listGroupsForUser(userId: string): GroupRow[] {
+  listGroupsForUser(userId: string): PublicGroup[] {
     return this.groups.listForUser(userId);
   }
 
   /** Throws NotFoundError if the group doesn't exist or the user isn't a member —
    *  deliberately the same error either way, so membership can't be probed for. */
-  getGroupForMember(groupId: string, userId: string): GroupRow {
+  getGroupForMember(groupId: string, userId: string): PublicGroup {
     const group = this.groups.findById(groupId);
     const membership = this.members.findMembership(groupId, userId);
     if (!group || !membership) {
@@ -38,7 +38,7 @@ export class GroupService {
     return group;
   }
 
-  renameGroup(groupId: string, userId: string, name: string): GroupRow {
+  renameGroup(groupId: string, userId: string, name: string): PublicGroup {
     this.requireOwner(groupId, userId);
     return this.groups.rename(groupId, name);
   }

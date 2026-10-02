@@ -32,6 +32,15 @@ export interface GroupRow {
   updated_at: string;
 }
 
+/** Group shape safe to send to clients — camelCase, matches every other public DTO. */
+export interface PublicGroup {
+  id: string;
+  name: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface GroupMemberRow {
   id: string;
   group_id: string;
