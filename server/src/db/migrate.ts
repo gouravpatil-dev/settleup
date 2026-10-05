@@ -100,6 +100,27 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    id: "0004_settlements",
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE settlements (
+          id TEXT PRIMARY KEY,
+          group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+          from_user_id TEXT NOT NULL REFERENCES users(id),
+          to_user_id TEXT NOT NULL REFERENCES users(id),
+          amount INTEGER NOT NULL CHECK (amount > 0),
+          settled_date TEXT NOT NULL,
+          note TEXT,
+          recorded_by TEXT NOT NULL REFERENCES users(id),
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          CHECK (from_user_id != to_user_id)
+        );
+
+        CREATE INDEX idx_settlements_group_id ON settlements(group_id);
+      `);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

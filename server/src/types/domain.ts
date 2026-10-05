@@ -106,6 +106,32 @@ export interface PublicExpense {
   }>;
 }
 
+export interface SettlementRow {
+  id: string;
+  group_id: string;
+  from_user_id: string;
+  to_user_id: string;
+  amount: number;
+  settled_date: string;
+  note: string | null;
+  recorded_by: string;
+  created_at: string;
+}
+
+export interface PublicSettlement {
+  id: string;
+  groupId: string;
+  fromUserId: string;
+  toUserId: string;
+  amount: number;
+  date: string;
+  note: string | null;
+  recordedBy: string;
+  createdAt: string;
+  fromName: string | null;
+  toName: string | null;
+}
+
 /** Attached to req.user by requireAuth. */
 export interface AuthenticatedUser {
   id: string;

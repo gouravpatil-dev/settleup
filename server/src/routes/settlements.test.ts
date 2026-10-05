@@ -126,3 +126,281 @@ describe("GET /api/groups/:groupId/settlements/plan", () => {
     expect(res.status).toBe(401);
   });
 });
+
+async function setUpGroupWithDebt(prefix: string) {
+  const owner = await registerUser(`${prefix}-owner@example.com`, "Owner");
+  const member = await registerUser(`${prefix}-member@example.com`, "Member");
+
+  const groupRes = await request(app)
+    .post("/api/groups")
+    .set("Cookie", owner.cookie)
+    .send({ name: `${prefix} Group` });
+  const groupId = groupRes.body.group.id;
+
+  await request(app)
+    .post(`/api/groups/${groupId}/members`)
+    .set("Cookie", owner.cookie)
+    .send({ email: member.user.email });
+
+  // Owner pays 1000, split equally -> member owes owner 500.
+  await request(app)
+    .post(`/api/groups/${groupId}/expenses`)
+    .set("Cookie", owner.cookie)
+    .send({
+      description: "Shared cost",
+      amount: 1000,
+      paidBy: owner.user.id,
+      date: "2026-09-20",
+      splitType: "equal",
+      participants: [{ userId: owner.user.id }, { userId: member.user.id }],
+    });
+
+  return { owner, member, groupId };
+}
+
+describe("POST /api/groups/:groupId/settlements (mark as paid)", () => {
+  it("records a full settlement and it reduces the balance to zero", async () => {
+    const { owner, member, groupId } = await setUpGroupWithDebt("record-full");
+
+    const recordRes = await request(app)
+      .post(`/api/groups/${groupId}/settlements`)
+      .set("Cookie", member.cookie)
+      .send({
+        fromUserId: member.user.id,
+        toUserId: owner.user.id,
+        amount: 500,
+        date: "2026-09-21",
+      });
+    expect(recordRes.status).toBe(201);
+    expect(recordRes.body.settlement.fromName).toBe("Member");
+    expect(recordRes.body.settlement.toName).toBe("Owner");
+
+    const balancesRes = await request(app)
+      .get(`/api/groups/${groupId}/balances`)
+      .set("Cookie", owner.cookie);
+    const memberBalance = balancesRes.body.balances.find(
+      (b: { userId: string }) => b.userId === member.user.id
+    );
+    expect(memberBalance.balance).toBe(0);
+
+    const planRes = await request(app)
+      .get(`/api/groups/${groupId}/settlements/plan`)
+      .set("Cookie", owner.cookie);
+    expect(planRes.body.transactions).toEqual([]);
+  });
+
+  it("records a partial settlement, leaving a residual balance", async () => {
+    const { owner, member, groupId } = await setUpGroupWithDebt("record-partial");
+
+    await request(app)
+      .post(`/api/groups/${groupId}/settlements`)
+      .set("Cookie", member.cookie)
+      .send({
+        fromUserId: member.user.id,
+        toUserId: owner.user.id,
+        amount: 200,
+        date: "2026-09-21",
+      });
+
+    const balancesRes = await request(app)
+      .get(`/api/groups/${groupId}/balances`)
+      .set("Cookie", owner.cookie);
+    const memberBalance = balancesRes.body.balances.find(
+      (b: { userId: string }) => b.userId === member.user.id
+    );
+    expect(memberBalance.balance).toBe(-300); // owed 500, paid 200
+  });
+
+  it("rejects fromUserId === toUserId (400)", async () => {
+    const { owner, groupId } = await setUpGroupWithDebt("record-self");
+
+    const res = await request(app)
+      .post(`/api/groups/${groupId}/settlements`)
+      .set("Cookie", owner.cookie)
+      .send({
+        fromUserId: owner.user.id,
+        toUserId: owner.user.id,
+        amount: 100,
+        date: "2026-09-21",
+      });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a fromUserId that isn't a group member (400)", async () => {
+    const { owner, groupId } = await setUpGroupWithDebt("record-outsider");
+    const outsider = await registerUser("record-outsider-x@example.com", "Outsider");
+
+    const res = await request(app)
+      .post(`/api/groups/${groupId}/settlements`)
+      .set("Cookie", owner.cookie)
+      .send({
+        fromUserId: outsider.user.id,
+        toUserId: owner.user.id,
+        amount: 100,
+        date: "2026-09-21",
+      });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a non-positive amount (400)", async () => {
+    const { owner, member, groupId } = await setUpGroupWithDebt("record-badamount");
+
+    const res = await request(app)
+      .post(`/api/groups/${groupId}/settlements`)
+      .set("Cookie", owner.cookie)
+      .send({
+        fromUserId: member.user.id,
+        toUserId: owner.user.id,
+        amount: 0,
+        date: "2026-09-21",
+      });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a non-member recording a settlement (404, not leaked)", async () => {
+    const { owner, groupId } = await setUpGroupWithDebt("record-nonmember");
+    const outsider = await registerUser("record-nonmember-x@example.com", "Outsider");
+
+    const res = await request(app)
+      .post(`/api/groups/${groupId}/settlements`)
+      .set("Cookie", outsider.cookie)
+      .send({
+        fromUserId: outsider.user.id,
+        toUserId: owner.user.id,
+        amount: 100,
+        date: "2026-09-21",
+      });
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("GET /api/groups/:groupId/settlements (history)", () => {
+  it("lists recorded settlements for the group", async () => {
+    const { owner, member, groupId } = await setUpGroupWithDebt("history");
+
+    await request(app)
+      .post(`/api/groups/${groupId}/settlements`)
+      .set("Cookie", member.cookie)
+      .send({
+        fromUserId: member.user.id,
+        toUserId: owner.user.id,
+        amount: 500,
+        date: "2026-09-21",
+        note: "Paid via UPI",
+      });
+
+    const res = await request(app)
+      .get(`/api/groups/${groupId}/settlements`)
+      .set("Cookie", owner.cookie);
+
+    expect(res.status).toBe(200);
+    expect(res.body.settlements).toHaveLength(1);
+    expect(res.body.settlements[0].note).toBe("Paid via UPI");
+  });
+});
+
+describe("DELETE /api/groups/:groupId/settlements/:settlementId (mark as unpaid)", () => {
+  it("lets the recorder undo their own settlement, restoring the balance", async () => {
+    const { owner, member, groupId } = await setUpGroupWithDebt("undo-self");
+
+    const recordRes = await request(app)
+      .post(`/api/groups/${groupId}/settlements`)
+      .set("Cookie", member.cookie)
+      .send({
+        fromUserId: member.user.id,
+        toUserId: owner.user.id,
+        amount: 500,
+        date: "2026-09-21",
+      });
+    const settlementId = recordRes.body.settlement.id;
+
+    const deleteRes = await request(app)
+      .delete(`/api/groups/${groupId}/settlements/${settlementId}`)
+      .set("Cookie", member.cookie);
+    expect(deleteRes.status).toBe(204);
+
+    const balancesRes = await request(app)
+      .get(`/api/groups/${groupId}/balances`)
+      .set("Cookie", owner.cookie);
+    const memberBalance = balancesRes.body.balances.find(
+      (b: { userId: string }) => b.userId === member.user.id
+    );
+    expect(memberBalance.balance).toBe(-500); // back to owing the full amount
+  });
+
+  it("lets the group owner undo a settlement they didn't record", async () => {
+    const { owner, member, groupId } = await setUpGroupWithDebt("undo-owner");
+
+    const recordRes = await request(app)
+      .post(`/api/groups/${groupId}/settlements`)
+      .set("Cookie", member.cookie)
+      .send({
+        fromUserId: member.user.id,
+        toUserId: owner.user.id,
+        amount: 500,
+        date: "2026-09-21",
+      });
+    const settlementId = recordRes.body.settlement.id;
+
+    const deleteRes = await request(app)
+      .delete(`/api/groups/${groupId}/settlements/${settlementId}`)
+      .set("Cookie", owner.cookie);
+    expect(deleteRes.status).toBe(204);
+  });
+
+  it("rejects a non-recorder, non-owner member undoing someone else's settlement (403)", async () => {
+    const owner = await registerUser("undo-forbid-owner@example.com", "Owner");
+    const memberA = await registerUser("undo-forbid-a@example.com", "Member A");
+    const memberB = await registerUser("undo-forbid-b@example.com", "Member B");
+
+    const groupRes = await request(app)
+      .post("/api/groups")
+      .set("Cookie", owner.cookie)
+      .send({ name: "Undo Forbid Group" });
+    const groupId = groupRes.body.group.id;
+
+    for (const m of [memberA, memberB]) {
+      await request(app)
+        .post(`/api/groups/${groupId}/members`)
+        .set("Cookie", owner.cookie)
+        .send({ email: m.user.email });
+    }
+
+    const recordRes = await request(app)
+      .post(`/api/groups/${groupId}/settlements`)
+      .set("Cookie", memberA.cookie)
+      .send({
+        fromUserId: memberA.user.id,
+        toUserId: owner.user.id,
+        amount: 100,
+        date: "2026-09-21",
+      });
+    const settlementId = recordRes.body.settlement.id;
+
+    const deleteRes = await request(app)
+      .delete(`/api/groups/${groupId}/settlements/${settlementId}`)
+      .set("Cookie", memberB.cookie);
+    expect(deleteRes.status).toBe(403);
+  });
+
+  it("returns 404 for a settlement id from a different group", async () => {
+    const groupA = await setUpGroupWithDebt("undo-crossa");
+    const groupB = await setUpGroupWithDebt("undo-crossb");
+
+    const recordRes = await request(app)
+      .post(`/api/groups/${groupA.groupId}/settlements`)
+      .set("Cookie", groupA.member.cookie)
+      .send({
+        fromUserId: groupA.member.user.id,
+        toUserId: groupA.owner.user.id,
+        amount: 100,
+        date: "2026-09-21",
+      });
+    const settlementId = recordRes.body.settlement.id;
+
+    const deleteRes = await request(app)
+      .delete(`/api/groups/${groupB.groupId}/settlements/${settlementId}`)
+      .set("Cookie", groupB.owner.cookie);
+    expect(deleteRes.status).toBe(404);
+  });
+});

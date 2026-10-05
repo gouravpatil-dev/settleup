@@ -5,10 +5,10 @@ piece is the settlement optimizer, which turns a group's raw
 expense obligations into a reduced set of final payments — not yet
 built (that's Phase 4–5).
 
-**Status: Phase 6 (Expense and Balance UI) complete.** The app now has
-a real, working frontend on top of the Phases 1–5 backend. This is
-also the current scope boundary for the project — see the note at
-the end of this file.
+**Status: Phase 7 (Settlement Experience) complete.** Balances, the
+settlement optimizer, and now actually recording/undoing payments are
+all wired end to end, front to back. See the scope note below for
+what's next.
 
 ## Stack
 
@@ -92,6 +92,44 @@ default; override with `VITE_API_URL` if needed.
   server regression test added. 97 total tests across both packages,
   all passing.
 
+## What's built (Phase 7)
+
+- **Settlements are now real**: a `settlements` table records actual
+  payments (separate from expenses, per the spec — recording one
+  never touches expense data). `POST /api/groups/:groupId/settlements`
+  ("mark as paid"), `GET .../settlements` (history),
+  `DELETE .../settlements/:id` ("mark as unpaid" — undoes a record).
+  Partial settlements work naturally: record less than the suggested
+  amount and the residual balance is exactly `owed - paid`.
+- **The balance engine now uses real settlement data** instead of the
+  empty placeholder from Phase 4 — `BalanceService` pulls recorded
+  settlements from the DB and passes them straight into
+  `calculateBalances()`, which already supported this input from day
+  one.
+- **Authorization decision**: either the person who recorded a
+  settlement or the group owner can undo it — not just anyone in the
+  group. Not explicitly specified, so documenting the choice here.
+- **UI**: the Balances page is now the full settlement experience —
+  current balances, an "Optimize settlement" button that computes the
+  plan on demand, a "Mark as paid" action per suggested transaction
+  (with an editable, pre-filled amount for partial settlements), and
+  a settlement history list with "Mark as unpaid" shown only to
+  whoever's actually allowed to use it (matches the backend rule
+  above, checked client-side for UX — the backend still enforces it
+  either way).
+- 12 new backend tests (106 total): recording a full settlement zeroes
+  the balance, a partial settlement leaves the correct residual,
+  `fromUserId === toUserId` rejected, a non-member `fromUserId`/
+  `toUserId` rejected, non-positive amount rejected, non-member
+  recording rejected (404), history listing, the recorder undoing
+  their own record, the owner undoing someone else's record, a
+  non-recorder non-owner blocked (403), and cross-group settlement id
+  correctly 404s.
+- Verified live end-to-end (not just tests): booted the real server,
+  ran expense → balances → record settlement → balances update →
+  history shows it → undo → balances restored, all through curl in
+  the actual request sequence the UI uses.
+
 ## A note on project scope
 
 This project was originally planned as a 22-phase build (see the full
@@ -161,11 +199,6 @@ planned as an immediate next phase the way Phases 1–6 were.
 
 ## Known limitations / not yet done
 
-- No settlement persistence/history (no "mark as paid") — the plan is
-  computed on the fly each time via `GET /settlements/plan`, nothing
-  is recorded. There's no dedicated settlement-plan UI screen yet
-  either — `Balances` shows net balances, not the optimized
-  transaction list (that pairing was originally Phase 7)
 - No expense update/delete, either in the API or the UI
 - No CSRF protection, no rate limiting, no email verification/password
   reset

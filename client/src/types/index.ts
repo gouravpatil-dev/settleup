@@ -64,3 +64,17 @@ export interface SettlementTransaction {
   fromName: string | null;
   toName: string | null;
 }
+
+export interface Settlement {
+  id: string;
+  groupId: string;
+  fromUserId: string;
+  toUserId: string;
+  amount: number;
+  date: string;
+  note: string | null;
+  recordedBy: string;
+  createdAt: string;
+  fromName: string | null;
+  toName: string | null;
+}
