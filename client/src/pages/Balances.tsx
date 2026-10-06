@@ -10,6 +10,7 @@ import {
   deleteSettlement,
 } from "../services/balances";
 import { getGroup, listMembers } from "../services/groups";
+import { WhySettlement } from "../components/WhySettlement";
 import { LoadingState } from "../components/LoadingState";
 import { ErrorState } from "../components/ErrorState";
 import { ApiError } from "../services/api";
@@ -200,6 +201,8 @@ export function Balances() {
         )}
         {markError && <ErrorState message={markError} />}
       </section>
+
+      {groupId && <WhySettlement groupId={groupId} />}
 
       <section>
         <h2>Settlement history</h2>

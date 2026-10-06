@@ -78,3 +78,20 @@ export interface Settlement {
   fromName: string | null;
   toName: string | null;
 }
+
+export interface SettlementExplanationStep extends SettlementTransaction {
+  step: number;
+  creditorRemainingBefore: number;
+  creditorRemainingAfter: number;
+  debtorRemainingBefore: number;
+  debtorRemainingAfter: number;
+}
+
+export interface SettlementExplanation {
+  rawObligationCount: number;
+  optimizedTransactionCount: number;
+  netBalances: MemberBalance[];
+  creditors: MemberBalance[];
+  debtors: MemberBalance[];
+  steps: SettlementExplanationStep[];
+}

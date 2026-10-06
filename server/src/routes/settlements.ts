@@ -21,6 +21,19 @@ settlementsRouter.get(
 );
 
 settlementsRouter.get(
+  "/explanation",
+  validate(groupIdParamsSchema, "params"),
+  asyncHandler(async (req, res) => {
+    const settlementService = new SettlementService(getDb());
+    const explanation = settlementService.getSettlementExplanation(
+      req.params.groupId,
+      req.user!.id
+    );
+    res.status(200).json(explanation);
+  })
+);
+
+settlementsRouter.get(
   "/",
   validate(groupIdParamsSchema, "params"),
   asyncHandler(async (req, res) => {

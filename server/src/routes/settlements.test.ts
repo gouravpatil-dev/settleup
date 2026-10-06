@@ -127,6 +127,146 @@ describe("GET /api/groups/:groupId/settlements/plan", () => {
   });
 });
 
+describe("GET /api/groups/:groupId/settlements/explanation", () => {
+  it("explains the transformation from raw obligations to optimized transactions", async () => {
+    const owner = await registerUser("explain-owner@example.com", "Owner");
+    const memberB = await registerUser("explain-b@example.com", "Member B");
+    const memberC = await registerUser("explain-c@example.com", "Member C");
+
+    const groupRes = await request(app)
+      .post("/api/groups")
+      .set("Cookie", owner.cookie)
+      .send({ name: "Explanation Group" });
+    const groupId = groupRes.body.group.id;
+
+    for (const m of [memberB, memberC]) {
+      await request(app)
+        .post(`/api/groups/${groupId}/members`)
+        .set("Cookie", owner.cookie)
+        .send({ email: m.user.email });
+    }
+
+    // Two 3-way equal-split expenses, each creating 2 raw obligations
+    // (the payer owes nothing to themselves) -> 4 raw obligations total,
+    // netting down to fewer final transactions.
+    for (const desc of ["Dinner", "Cabs"]) {
+      await request(app)
+        .post(`/api/groups/${groupId}/expenses`)
+        .set("Cookie", owner.cookie)
+        .send({
+          description: desc,
+          amount: 900,
+          paidBy: owner.user.id,
+          date: "2026-09-20",
+          splitType: "equal",
+          participants: [
+            { userId: owner.user.id },
+            { userId: memberB.user.id },
+            { userId: memberC.user.id },
+          ],
+        });
+    }
+
+    const res = await request(app)
+      .get(`/api/groups/${groupId}/settlements/explanation`)
+      .set("Cookie", owner.cookie);
+
+    expect(res.status).toBe(200);
+    expect(res.body.rawObligationCount).toBe(4); // 2 expenses x 2 non-payer participants
+    expect(res.body.optimizedTransactionCount).toBe(2); // B->owner, C->owner
+    expect(res.body.optimizedTransactionCount).toBeLessThan(res.body.rawObligationCount);
+
+    expect(res.body.creditors).toHaveLength(1);
+    expect(res.body.creditors[0].userId).toBe(owner.user.id);
+    expect(res.body.debtors).toHaveLength(2);
+
+    expect(res.body.steps).toHaveLength(2);
+    for (const step of res.body.steps) {
+      expect(step.to).toBe(owner.user.id);
+      expect(step.creditorRemainingAfter).toBe(step.creditorRemainingBefore - step.amount);
+      expect(step.debtorRemainingAfter).toBe(0); // each debtor fully settles in one step here
+    }
+    expect(res.body.steps[0].step).toBe(1);
+    expect(res.body.steps[1].step).toBe(2);
+  });
+
+  it("reflects a recorded settlement in the explanation (fewer obligations left)", async () => {
+    const owner = await registerUser("explain2-owner@example.com", "Owner");
+    const member = await registerUser("explain2-member@example.com", "Member");
+
+    const groupRes = await request(app)
+      .post("/api/groups")
+      .set("Cookie", owner.cookie)
+      .send({ name: "Explanation Group 2" });
+    const groupId = groupRes.body.group.id;
+
+    await request(app)
+      .post(`/api/groups/${groupId}/members`)
+      .set("Cookie", owner.cookie)
+      .send({ email: member.user.email });
+
+    await request(app)
+      .post(`/api/groups/${groupId}/expenses`)
+      .set("Cookie", owner.cookie)
+      .send({
+        description: "Dinner",
+        amount: 1000,
+        paidBy: owner.user.id,
+        date: "2026-09-20",
+        splitType: "equal",
+        participants: [{ userId: owner.user.id }, { userId: member.user.id }],
+      });
+
+    await request(app)
+      .post(`/api/groups/${groupId}/settlements`)
+      .set("Cookie", member.cookie)
+      .send({
+        fromUserId: member.user.id,
+        toUserId: owner.user.id,
+        amount: 500,
+        date: "2026-09-21",
+      });
+
+    const res = await request(app)
+      .get(`/api/groups/${groupId}/settlements/explanation`)
+      .set("Cookie", owner.cookie);
+
+    expect(res.status).toBe(200);
+    expect(res.body.optimizedTransactionCount).toBe(0); // already settled
+    expect(res.body.steps).toEqual([]);
+  });
+
+  it("rejects a non-member requesting the explanation (404, not leaked)", async () => {
+    const owner = await registerUser("explain3-owner@example.com", "Owner");
+    const outsider = await registerUser("explain3-outsider@example.com", "Outsider");
+
+    const groupRes = await request(app)
+      .post("/api/groups")
+      .set("Cookie", owner.cookie)
+      .send({ name: "Private Explanation Group" });
+    const groupId = groupRes.body.group.id;
+
+    const res = await request(app)
+      .get(`/api/groups/${groupId}/settlements/explanation`)
+      .set("Cookie", outsider.cookie);
+
+    expect(res.status).toBe(404);
+  });
+
+  it("rejects an unauthenticated request (401)", async () => {
+    const owner = await registerUser("explain4-owner@example.com", "Owner");
+
+    const groupRes = await request(app)
+      .post("/api/groups")
+      .set("Cookie", owner.cookie)
+      .send({ name: "No Auth Explanation Group" });
+    const groupId = groupRes.body.group.id;
+
+    const res = await request(app).get(`/api/groups/${groupId}/settlements/explanation`);
+    expect(res.status).toBe(401);
+  });
+});
+
 async function setUpGroupWithDebt(prefix: string) {
   const owner = await registerUser(`${prefix}-owner@example.com`, "Owner");
   const member = await registerUser(`${prefix}-member@example.com`, "Member");

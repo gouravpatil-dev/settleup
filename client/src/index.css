@@ -350,3 +350,55 @@ button.danger:hover {
   border-radius: var(--radius);
   background: var(--color-surface);
 }
+
+/* Phase 8 additions */
+
+.why-settlement {
+  margin-top: 1.5rem;
+}
+
+.why-settlement-toggle {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--color-text);
+}
+
+.why-settlement-body {
+  margin-top: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.why-settlement-summary {
+  font-size: 1rem;
+}
+
+.why-settlement-columns {
+  display: flex;
+  gap: 2rem;
+  margin: 1rem 0;
+  flex-wrap: wrap;
+}
+
+.why-settlement-columns > div {
+  flex: 1;
+  min-width: 180px;
+}
+
+.why-settlement-columns ul {
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.why-settlement-steps {
+  padding-left: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}

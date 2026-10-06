@@ -5,10 +5,10 @@ piece is the settlement optimizer, which turns a group's raw
 expense obligations into a reduced set of final payments — not yet
 built (that's Phase 4–5).
 
-**Status: Phase 7 (Settlement Experience) complete.** Balances, the
-settlement optimizer, and now actually recording/undoing payments are
-all wired end to end, front to back. See the scope note below for
-what's next.
+**Status: Phase 8 (Optimization Explanation) complete.** The
+settlement algorithm is no longer a black box — there's now a
+step-by-step "Why this settlement?" view. See the scope note below
+for what's next.
 
 ## Stack
 
@@ -129,6 +129,35 @@ default; override with `VITE_API_URL` if needed.
   ran expense → balances → record settlement → balances update →
   history shows it → undo → balances restored, all through curl in
   the actual request sequence the UI uses.
+
+## What's built (Phase 8)
+
+- **`GET /api/groups/:groupId/settlements/explanation`** — the "Why
+  this settlement?" data: `rawObligationCount` (before) vs
+  `optimizedTransactionCount` (after), the full creditor/debtor
+  breakdown, and a `steps` array narrating each matching decision the
+  greedy optimizer made, with running remaining-balance figures for
+  both sides of each transfer.
+- **No algorithm duplication**: rather than re-implementing the
+  matching logic to capture a trace, the explanation replays the
+  already-deterministic `optimizeSettlements()` output in order,
+  reconstructing the before/after state at each step. The optimizer
+  itself didn't change.
+- **"Raw obligation" definition** (not specified in the brief, so
+  documenting the choice): one obligation per (expense, participant)
+  pair where the participant isn't the payer — the payer's own share
+  of their own expense isn't a debt to anyone. Verified live: two
+  ₹900 three-way-equal-split expenses produce exactly 4 raw
+  obligations, reduced to 2 final transactions.
+- **UI**: a collapsible "Why this settlement?" section on the
+  Balances page (fetches on first expand, not eagerly) showing the
+  before/after counts, creditors/debtors, and the matching-decision
+  narrative in plain language.
+- 4 new backend tests (110 total): the worked 4-obligations-to-
+  2-transactions example above, an already-settled group showing an
+  empty explanation, non-member access denied (404), and
+  unauthenticated access denied (401).
+- Verified live end-to-end through curl in the real request sequence.
 
 ## A note on project scope
 
